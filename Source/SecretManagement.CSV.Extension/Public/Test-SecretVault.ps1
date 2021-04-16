@@ -18,11 +18,29 @@ function Test-SecretVault {
     )
 
     #Here is where you should test a vault
-    Write-Host -Fore Magenta 'Testing the vault!'
+    Write-Host -Fore Cyan 'Testing the vault!'
 
-    if (-not $Quick) {
-        Write-Host -Fore Magenta 'No -Quick found, lets do a detailed check!'
+    if (-not (Test-Path $($AdditionalParameters.Path))) {
+        Write-Error "${VaultName} Vault not found at $($AdditionalParameters.Path)"
+        return $false
     }
-    # return [TestStore]::TestVault()
-    return $true
+
+    Write-Host -Fore Cyan "Yep, the file still exists at $($AdditionalParameters.Path)"
+    if (-not $Quick) {
+        Write-Host -Fore Cyan 'No -Quick found, lets do a detailed check!'
+        $csvData = Import-Csv $AdditionalParameters.Path -ErrorAction Stop
+        if ($null -eq $csvData) {
+            Write-Warning "${VaultName} file was found but it has no data. This is normal if you created a new vault"
+        }
+        try {
+            $mydata = $csvData | ConvertFrom-CSV -ErrorAction Stop
+        } catch {
+            Write-Error "${VaultName}: $($AdditionalParameters.Path) is not in a CSV format, it may be corrupted"
+            return $false
+        }
+        if ($myData) {return $true}
+        #TODO: Maybe some additional testing to make sure the right fields exist
+    }
+
+    return $false
 }

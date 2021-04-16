@@ -43,8 +43,8 @@ function Get-SecretInfo {
         [SecretType]$secretType = 'String'
         
         #If we have metadata, we want to make a hashtable of that information. In this case we do, otherwise it can just be $null
-        $metadata = @{
-            Modified = $secretInfoItem.Modified
+        $Metadata = @{
+            Modified = [DateTime]$secretInfoItem.Modified #We can return in any type we want, for the most part
             Comment  = $secretInfoItem.Comment
         }
         

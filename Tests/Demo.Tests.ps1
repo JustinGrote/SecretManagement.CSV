@@ -29,6 +29,9 @@ Describe 'CSV Vault Demo' {
         Register-SecretVault -Name 'PESTER-MultipleEntries' -ModuleName $moduleManifest -VaultParameters @{
             Path=$MultipleEntryCSVPath
         }
+        Register-SecretVault -Name 'PESTER-BadVault' -ModuleName $moduleManifest -VaultParameters @{
+            Path="TestDrive:\NotARealVault"
+        }231
     }
     AfterAll {
         try {
@@ -37,14 +40,36 @@ Describe 'CSV Vault Demo' {
         try {
             Unregister-SecretVault -Name 'PESTER-MultipleEntries'
         } catch {}
+        try {
+            Unregister-SecretVault -Name 'PESTER-BadVault'
+        } catch {}
     }
     BeforeEach {
         #Copy a fresh vault each time to avoid tests interfering with each other
         Copy-Item (Resolve-Path $Mocks/SingleEntry.csv) $SingleEntryCSVPath -Force
         Copy-Item (Resolve-Path $Mocks/MultipleEntries.csv) $MultipleEntryCSVPath -Force
     }
-    It 'Gets all secret Info' {
-        Get-SecretInfo -Name 'PesterSecret' -Vault 'Pester-MultipleEntries'
+
+    It 'Can Test a Vault' {
+        Test-SecretVault -Name 'Pester-MultipleEntries' |
+            Should -Be $true
+    }
+    It 'Fails on a vault with a bad path' {
+        #We can't use Should -Throw here because its impossible to turn it into a terminating error
+        Test-SecretVault -Name 'Pester-BadVault' 2>$null |
+            Should -Be $false
+        $error[0] | Should -BeLike '*Vault not found*'
+    }
+    It 'Gets all secret Infos' {
+        Get-SecretInfo -Vault 'Pester-MultipleEntries' |
+            Should -HaveCount 3
+    }
+
+    It 'Can read the metadata of a particular secret' {
+        $secretInfo = Get-SecretInfo -Name 'PesterSecret3' -Vault 'Pester-MultipleEntries'
+        $secretInfo.Metadata.Comment | Should -Be 'this one is my favorite'
+        $secretInfo.Metadata.Modified | Should -BeOfType [DateTime]
+        $secretInfo.Metadata.Modified | Should -Be ([DateTime]'3/12/1890 4:40:55 PM')
     }
 
     It 'Gets a secret' {
@@ -61,7 +86,45 @@ Describe 'CSV Vault Demo' {
 
     It 'Can create secrets and fetch them' {
         Set-Secret -Name 'MyTestSecret' -Vault 'PESTER-SingleEntry' -Secret 'notverysecret'
+        $newSecret = Get-SecretInfo -Name 'MyTestSecret' -Vault 'PESTER-SingleEntry'
+        $newSecret.Name | Should -Be 'MyTestSecret'
+        $newSecret.Type | Should -Be 'String'
+        
+    }
+    It 'Should update an existing secret' {
+        Get-Secret -Name 'PesterSecret' -Vault 'PESTER-SingleEntry' -AsPlainText |
+            Should -Be 'S3cret123!'
+        Set-Secret -Name 'PesterSecret' -Vault 'PESTER-SingleEntry' -Secret 'notverysecret'
+        Get-Secret -Name 'PesterSecret' -Vault 'PESTER-SingleEntry' -AsPlainText |
+            Should -Be 'notverysecret'
     }
 
+    It 'Can Update Secret Metadata' {
+        $Comment = 'I think this secret is pretty OK I suppose'
+        Set-SecretInfo -Name 'PesterSecret2' -Vault 'Pester-MultipleEntries' -Metadata @{
+            Comment = $Comment
+        }
+        $updatedSecret = Get-SecretInfo -Name 'PesterSecret2' -Vault 'Pester-MultipleEntries'
+        $updatedSecret.Metadata.Comment | Should -Be $Comment
+        #Make sure the modified date updated
+        $updatedSecret.MetaData.Modified | Should -BeGreaterThan (Get-Date).AddMinutes(-1)
+    }
 
+    It 'Can Set a new secret with Metadata' {
+        $Comment = 'I think this secret is pretty OK I suppose'
+        Set-Secret -Name 'MyNewSecret' -Vault 'Pester-MultipleEntries' -Secret 'notverysecret' -Metadata @{
+            Comment = $Comment
+        }
+        $newSecret = Get-SecretInfo -Name 'MyNewSecret' -Vault 'Pester-MultipleEntries'
+        $newSecret | Get-Secret -AsPlainText | Should -Be 'NotVerySecret'
+        $newSecret.Metadata.Comment | Should -Be $Comment
+        #Make sure the modified date updated
+        $newSecret.MetaData.Modified | Should -BeGreaterThan (Get-Date).AddMinutes(-1)
+    }
+
+    It 'Removes a secret' {
+        $testSecret = Remove-Secret -Name 'PesterSecret' -Vault 'PESTER-MultipleEntries'
+        Get-SecretInfo -Vault 'PESTER-MultipleEntries' |
+            Should -HaveCount 2
+    }
 }
