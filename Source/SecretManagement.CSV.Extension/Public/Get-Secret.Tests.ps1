@@ -1,4 +1,4 @@
-. ../Tests/Shared.ps1
+. $PSScriptRoot/../Tests/Shared.ps1
 $FunctionName = ([String]($MyInvocation.MyCommand)).split('.')[0]
 Describe $FunctionName -Tag 'Unit' {
     BeforeAll {
