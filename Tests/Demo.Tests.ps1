@@ -31,7 +31,7 @@ Describe 'CSV Vault Demo' {
         }
         Register-SecretVault -Name 'PESTER-BadVault' -ModuleName $moduleManifest -VaultParameters @{
             Path="TestDrive:\NotARealVault"
-        }231
+        }
     }
     AfterAll {
         try {
